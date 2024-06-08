@@ -1,0 +1,22 @@
+{
+    "manifest_version": 3,
+    "name": "GitHub Rebase PR",
+    "version": "1.0",
+    "permissions": [
+        "activeTab",
+        "webRequest",
+        "scripting",
+        "contextMenus",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://api.github.com/*",
+        "https://github.dev/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_title": "Rebase PR"
+    }
+}
