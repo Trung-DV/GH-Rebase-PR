@@ -2,14 +2,44 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
         id: "rebasePR",
         title: "Rebase PR",
-        contexts: ["all"],
+        contexts: ["page"],
         documentUrlPatterns: ["https://github.com/*/pull/*"]
     });
+    chrome.contextMenus.create({
+        id: "getToken",
+        title: "Get Token",
+        contexts: ["action"],
+    })
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === "rebasePR") {
         rebasePR(tab)
+        return;
+    }
+
+    let popupNewToken = function (token) {
+        chrome.scripting.executeScript({
+            target: {tabId: tab.id},
+            function: function (token) {
+                alert("GitHub Token: " + token)
+            },
+            args: [token],
+            injectImmediately: true,
+        });
+    };
+    if (info.menuItemId === "getToken") {
+        chrome.storage.sync.get(['GitHubToken'], function (result) {
+            checkGitHubToken(result.GitHubToken, isValid => {
+                if (isValid) {
+                    popupNewToken(result.GitHubToken);
+                    return;
+                }
+                getTokenFromGitHubDev((newAuthHeader) => {
+                    popupNewToken(newAuthHeader);
+                })
+            });
+        })
     }
 });
 
@@ -116,4 +146,14 @@ function doRebaseScript(authHeader) {
     }).catch(error => {
         console.error('Error:', error);
     });
+}
+
+function checkGitHubToken(token, callback) {
+    fetch('https://api.github.com/user', {
+        headers: {
+            'Authorization': `${token}`
+        }
+    })
+        .then(response => callback(response.ok))
+        .catch(() => callback(false));
 }
