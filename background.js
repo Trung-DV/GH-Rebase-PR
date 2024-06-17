@@ -131,18 +131,26 @@ function doRebaseScript(authHeader) {
     const prURL = prAPIBuilder.join('/');
     console.log(`PR_URL: ${prURL}`);
     fetch(`${prURL}/update-branch`, {
-        "headers": {"Authorization": authHeader},
-        "body": JSON.stringify({"update_method": "rebase", "expected_head_sha": headSHA}),
-        "method": "PUT"
+        headers: {Authorization: authHeader},
+        body: JSON.stringify({"update_method": "rebase", "expected_head_sha": headSHA}),
+        method: "PUT"
     }).then(resp => {
-        if (resp.status >= 400 && resp.status < 500) {                // Send a message to the background script to get a new token
+        if (resp.status === 422) {
+            resp.json().then(data => {console.log("Rebase failed", data);
+                alert(data.message);
+            });
+            return;
+        }
+        if (resp.status === 401) {                // Send a message to the background script to get a new token
             chrome.runtime.sendMessage({action: "getTokenFromGitHubDev"},
                 function (response) {
                     console.log("Received new token", response);
                     doRebaseScript(response.GitHubToken);
                 });
             alert('Unauthorized: Please wait a moment to get a new token');
+            return
         }
+        alert('Others error, check console log')
     }).catch(error => {
         console.error('Error:', error);
     });
