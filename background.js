@@ -136,8 +136,21 @@ function doRebaseScript(authHeader) {
         method: "PUT"
     }).then(resp => {
         if (resp.status === 422) {
-            resp.json().then(data => {console.log("Rebase failed", data);
-                alert(data.message);
+            resp.json().then(data => {
+                console.log("Rebase failed", data);
+                if (data.message === "There are no new commits on the base branch.") {
+                    const branchName = document.querySelector('span.commit-ref.head-ref a').textContent.trim();
+                    const repoName = window.location.href.split('/')[3] + '/' + window.location.href.split('/')[4];
+                    chrome.runtime.sendMessage({
+                        action: "triggerEmptyCommit",
+                        authHeader: authHeader,
+                        headSHA: headSHA,
+                        branchName: branchName,
+                        repoName: repoName
+                    });
+                    return;
+                }
+                alert(data.message); // Assuming the response body has a 'message' property
             });
             return;
         }
@@ -148,9 +161,7 @@ function doRebaseScript(authHeader) {
                     doRebaseScript(response.GitHubToken);
                 });
             alert('Unauthorized: Please wait a moment to get a new token');
-            return
         }
-        alert('Others error, check console log')
     }).catch(error => {
         console.error('Error:', error);
     });
@@ -164,4 +175,50 @@ function checkGitHubToken(token, callback) {
     })
         .then(response => callback(response.ok))
         .catch(() => callback(false));
+}
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "triggerEmptyCommit") {
+        triggerEmptyCommit(message.authHeader, message.headSHA, message.branchName, message.repoName);
+    }
+});
+
+function triggerEmptyCommit(authHeader, headSHA, branchName, repoName) {
+    console.log('Triggering empty commit', branchName, repoName, headSHA);
+    const query = `
+        mutation {
+            createCommitOnBranch(input: {
+                branch: {
+                    branchName: "${branchName}",
+                    repositoryNameWithOwner: "${repoName}"
+                },
+                message: {
+                    headline: "trigger"
+                },
+                fileChanges: {},
+                expectedHeadOid: "${headSHA}"
+            }) {
+                commit {
+                    oid
+                }
+                ref {
+                    name
+                }
+            }
+        }
+    `;
+    fetch('https://api.github.com/graphql', {
+        method: 'POST',
+        headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({query})
+    }).then(response => response.json())
+        .then(data => {
+            console.log('Empty commit created', data);
+        }).catch(error => {
+        console.error('Error creating empty commit:', error);
+    });
 }
